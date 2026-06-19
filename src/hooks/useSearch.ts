@@ -18,6 +18,46 @@ export function useSearch(): UseSearchReturn {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+    // Incrementing request ID for stale-response prevention
+  const requestIdRef = useRef(0)
+  // Track mount state to avoid setState after unmount
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    // Capture the request ID for this effect run
+    const currentRequestId = ++requestIdRef.current
+
+    setIsLoading(true)
+    setError(null)
+
+    const timerId = setTimeout(async () => {
+      try {
+        const data = await searchItems(query)
+
+        // Discard stale responses
+        if (!mountedRef.current || currentRequestId !== requestIdRef.current) return
+
+        setResults(data)
+        setIsLoading(false)
+      } catch (err) {
+        if (!mountedRef.current || currentRequestId !== requestIdRef.current) return
+
+        setError(err instanceof Error ? err.message : 'Something went wrong')
+        setIsLoading(false)
+      }
+    }, 300)
+
+    return () => {
+      clearTimeout(timerId)
+    }
+  }, [query])
   // ── TODO: Implement debounced async search ──────────────────────────────
   //
   // 1. DEBOUNCE (300 ms)
